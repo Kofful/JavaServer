@@ -64,7 +64,9 @@ class ConnectionHandler implements Runnable {
     static final int ADD_USER_IN_LOBBY = 1011;
     static final int REMOVE_USER_FROM_LOBBY = 1012;
     static final int START_GAME = 1013;
-    static final int CHANGE_AVATAR = 1014;
+    static final int CLOSE_LOBBY = 1014;
+    static final int CHANGE_AVATAR = 1015;
+    static final int GET_AVATAR = 1016;
     private ObjectOutputStream oos;
     private ObjectInputStream ois;
 
@@ -149,13 +151,15 @@ class ConnectionHandler implements Runnable {
                     case FIND_LOBBY: {
                         String nickname = (String) ois.readObject();
                         LobbyAndUsers result = DBWorker.findLobby(userId);
+                        int avatarId = DBWorker.getAvatar(userId);
                         oos.writeInt(result.getLobbyId());
                         if (result.getLobbyId() != 0) {
                             for (Map.Entry<Integer, ObjectOutputStream> entry :
                                     GameServer.lobbys.get(result.getLobbyId()).playerStreams.entrySet()) {
                                 try {
                                     ObjectOutputStream out = entry.getValue();
-                                    out.writeInt(userId);
+                                    out.writeInt(ADD_USER_IN_LOBBY);
+                                    out.writeInt(avatarId);
                                     out.writeObject(nickname);
                                     out.flush();
                                 } catch (Exception ex) {
@@ -164,8 +168,9 @@ class ConnectionHandler implements Runnable {
                             }
                             oos.writeInt(result.getMaxPlayers());
                             oos.writeInt(result.getUsers().size());
-                            for (String player : result.getUsers()) {
-                                oos.writeObject(player);
+                            for (int i = 0; i < result.getUsers().size(); i++) {
+                                oos.writeInt(result.getAvatars().get(i));
+                                oos.writeObject(result.getUsers().get(i));
                             }
                             GameServer.lobbys.get(result.getLobbyId()).playerStreams.put(userId, oos);
                             break;
@@ -179,6 +184,20 @@ class ConnectionHandler implements Runnable {
                     }
 
                     case REMOVE_USER_FROM_LOBBY: {
+                        int lobbyId = ois.readInt();
+                        DBWorker.removeUserFromLobby(userId);
+                        for (Map.Entry<Integer, ObjectOutputStream> entry :
+                                GameServer.lobbys.get(lobbyId).playerStreams.entrySet()) {
+                            try {
+                                ObjectOutputStream out = entry.getValue();
+                                out.writeInt(REMOVE_USER_FROM_LOBBY);
+                                out.writeInt(userId);
+                                out.flush();
+                            } catch (Exception ex) {
+                                System.out.println(ex.getMessage());
+                            }
+                        }
+
                         break;
                     }
 
@@ -186,9 +205,32 @@ class ConnectionHandler implements Runnable {
                         break;
                     }
 
+                    case CLOSE_LOBBY: {
+                        int lobbyId = ois.readInt();
+                        DBWorker.removeLobby(lobbyId);
+                        for (Map.Entry<Integer, ObjectOutputStream> entry :
+                                GameServer.lobbys.get(lobbyId).playerStreams.entrySet()) {
+                            try {
+                                ObjectOutputStream out = entry.getValue();
+                                out.writeInt(CLOSE_LOBBY);
+                                out.flush();
+                            } catch (Exception ex) {
+                                System.out.println(ex.getMessage());
+                            }
+                        }
+                        break;
+                    }
+
                     case CHANGE_AVATAR: {
                         int avatarId = ois.readInt();
-                        DBWorker.changeAvatar(userId,  avatarId);
+                        DBWorker.changeAvatar(userId, avatarId);
+                        break;
+                    }
+
+                    case GET_AVATAR: {
+                        int avatarId = DBWorker.getAvatar(userId);
+                        oos.writeInt(avatarId);
+                        oos.flush();
                         break;
                     }
 
@@ -197,7 +239,8 @@ class ConnectionHandler implements Runnable {
             }
         } catch (Exception ex) {
             System.out.println("socket removed");
-            System.out.println(ex.getMessage());
+            System.out.println(ex.getClass());
+            //System.out.println(ex.getMessage());
             DBWorker.setOffline(userId);
             DBWorker.removeLobbyIfExists(userId);
             GameServer.outputConnections.remove(oos);

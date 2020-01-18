@@ -161,14 +161,14 @@ public class DBWorker {
             Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
             Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/munchkindb?useUnicode=true&serverTimezone=UTC", "root", "");
             Statement statement = con.createStatement();
-            statement.execute("insert into `lobbys` (creatorId, players, friendsonly) value ("
+            statement.execute("insert into `lobbies` (creatorId, players, friendsonly) value ("
                     + userId + ", "
                     + players +", "
                     + friendsOnly + ")");
-            ResultSet result = statement.executeQuery("select id from `lobbys` where creatorId = " + userId);
+            ResultSet result = statement.executeQuery("select id from `lobbies` where creatorId = " + userId);
             result.next();
             int lobbyId = result.getInt("id");
-            statement.execute("insert into `players_in_lobbys` (userId, lobbyId) value ("
+            statement.execute("insert into `players_in_lobbies` (userId, lobbyId) value ("
                     + userId + ", "
                     + lobbyId + ")");
             con.close();
@@ -186,18 +186,17 @@ public class DBWorker {
             Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
             Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/munchkindb?useUnicode=true&serverTimezone=UTC", "root", "");
             Statement statement = con.createStatement();
-            ResultSet result = statement.executeQuery("select id, players from `lobbys` where players > (select COUNT(*) from `players_in_lobbys` where lobbyId = lobbys.id) and friendsonly = 0");
+            ResultSet result = statement.executeQuery("select id, players from `lobbies` where players > (select COUNT(*) from `players_in_lobbies` where lobbyId = lobbies.id) and friendsonly = 0");
             if(result.next()) {
                 data.setLobbyId(result.getInt("id"));
-                System.out.println("FOUND LOBBY - " + data.getLobbyId());
                 data.setMaxPlayers(result.getInt("players"));
-                result = statement.executeQuery("select players_in_lobbys.userId, users.nickname from `players_in_lobbys`" +
+                result = statement.executeQuery("select users.avatar, users.nickname from `players_in_lobbies`" +
                         " join `users` on id = userId  where lobbyId = " + data.getLobbyId());
-                System.out.println();
                 while(result.next()) {
+                    data.addAvatar(result.getInt("avatar"));
                     data.addUser(result.getString("nickname"));
                 }
-                statement.execute("insert into `players_in_lobbys` (userId, lobbyId) value ("
+                statement.execute("insert into `players_in_lobbies` (userId, lobbyId) value ("
                         + userId + ", "
                         + data.getLobbyId() + ")");
             }
@@ -221,13 +220,54 @@ public class DBWorker {
         }
     }
 
+
+    public static int getAvatar(int userId) {
+        int avatarId = 0;
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
+            Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/munchkindb?useUnicode=true&serverTimezone=UTC", "root", "");
+            Statement statement = con.createStatement();
+            ResultSet result = statement.executeQuery("select avatar from `users` where id = " + userId);
+            result.next();
+            avatarId = result.getInt("avatar");
+            con.close();
+        } catch (Exception ex) {
+            System.out.println(ex.getMessage());
+        }
+        return avatarId;
+    }
+
+    public static void removeUserFromLobby(int userId) {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
+            Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/munchkindb?useUnicode=true&serverTimezone=UTC", "root", "");
+            Statement statement = con.createStatement();
+            statement.execute("delete from `players_in_lobbies` where userId = " + userId);
+            con.close();
+        } catch (Exception ex) {
+            System.out.println(ex.getMessage());
+        }
+    }
+
+    public static void removeLobby(int lobbyId) {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
+            Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/munchkindb?useUnicode=true&serverTimezone=UTC", "root", "");
+            Statement statement = con.createStatement();
+            statement.execute("delete from `lobbies` where id = " + lobbyId);
+            con.close();
+        } catch (Exception ex) {
+            System.out.println(ex.getMessage());
+        }
+    }
+
     public static void removeLobbyIfExists(int userId) {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
             Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/munchkindb?useUnicode=true&serverTimezone=UTC", "root", "");
             Statement statement = con.createStatement();
-            statement.execute("delete from `lobbys` where creatorId = " + userId);
-            statement.execute("delete from `players_in_lobbys` where userId = " + userId);
+            statement.execute("delete from `lobbies` where creatorId = " + userId);
+            statement.execute("delete from `players_in_lobbies` where userId = " + userId);
             con.close();
         } catch (Exception ex) {
             System.out.println(ex.getMessage());
